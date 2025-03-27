@@ -101,17 +101,19 @@ def cal_momentum_skew_term(skewx, skewy, uv, vv, mesh):
 
 
 def solve_x_mom(mesh, uc_, ap_, anb_, scx_, skewx_, res_):
+    snsign = uf.shorted_name(mesh.global_faces, 'snsign')[0]
+    c2f, f2c = uf.shorted_name(mesh.link, 'c2f', 'f2c')
     def cal_residual(mesh, uc, ap, anb, scx, skewx, res, res2x, iter_):
         res.fill(0.0)
         sumr = 0.0      # residual summation
         for ic in range(mesh.no_elems()):
             sumf = 0.0
             for local_neighbor in range(mesh.no_local_faces()):   # Summing over all neighborhoods
-                ifc = mesh.link.c2f[ic, local_neighbor]
-                if mesh.global_faces.snsign[ic, local_neighbor] == 1:
-                    icn = mesh.link.f2c[ifc, 1]
+                ifc = c2f[ic, local_neighbor]
+                if snsign[ic, local_neighbor] == 1:
+                    icn = f2c[ifc, 1]
                 else:
-                    icn = mesh.link.f2c[ifc, 0]
+                    icn = f2c[ifc, 0]
 
                 sumf += anb[ic, local_neighbor] * uc[icn]
 
@@ -149,17 +151,19 @@ def solve_x_mom(mesh, uc_, ap_, anb_, scx_, skewx_, res_):
 
 
 def solve_y_mom(mesh, vc_, ap_, anb_, scy_, skewy_, res_):
+    snsign = uf.shorted_name(mesh.global_faces, 'snsign')[0]
+    c2f, f2c = uf.shorted_name(mesh.link, 'c2f', 'f2c')
     def cal_residual(mesh, vc, ap, anb, scy, skewy, res, res2y, iter_) :
         res.fill(0.0)
         sumr = 0.0
         for ic in range(mesh.no_elems()):
             sumf = 0.0
             for local_neighbor in range(mesh.no_local_faces()):   # Summing over all neighborhoods
-                ifc = mesh.link.c2f[ic, local_neighbor]
-                if mesh.global_faces.snsign[ic, local_neighbor] == 1:
-                    icn = mesh.link.f2c[ifc, 1]
+                ifc = c2f[ic, local_neighbor]
+                if snsign[ic, local_neighbor] == 1:
+                    icn = f2c[ifc, 1]
                 else:
-                    icn = mesh.link.f2c[ifc, 0]
+                    icn = f2c[ifc, 0]
 
                 sumf += anb[ic, local_neighbor] * vc[icn]
 
@@ -197,80 +201,90 @@ def solve_y_mom(mesh, vc_, ap_, anb_, scy_, skewy_, res_):
 
 
 def cal_massflow_face(mesh, uc, vc, pc, pf, ap, fw, mdotf):
-    vol = mesh.elems.volume
+    sn, snsign, area, delta = uf.shorted_name(mesh.global_faces, 'sn', 'snsign', 'area', 'delta')
+    c2f, f2c, f_2_bf = uf.shorted_name(mesh.link, 'c2f', 'f2c', 'f_2_bf')
+    volume = uf.shorted_name(mesh.elems, 'volume')[0]
+
     for ifc in range(mesh.no_faces()):
-        if mesh.link.f_2_bf[ifc] != -1:                     # IF boundary face = continue
+        if f_2_bf[ifc] != -1:                     # IF boundary face = continue
             continue
-        c0 = mesh.link.f2c[ifc, 0]
-        c1 = mesh.link.f2c[ifc, 1]
+        c0 = f2c[ifc, 0]
+        c1 = f2c[ifc, 1]
         velf_x = fw[ifc] * uc[c0] + (1.0 - fw[ifc]) * uc[c1]
         velf_y = fw[ifc] * vc[c0] + (1.0 - fw[ifc]) * vc[c1]
-        velf_i = velf_x * mesh.global_faces.sn[ifc, 0] + velf_y * mesh.global_faces.sn[ifc, 1]
+        velf_i = velf_x * sn[ifc, 0] + velf_y * sn[ifc, 1]
 
         V0dp0_x = 0.0
         V0dp0_y = 0.0
         for local_face in range(mesh.no_local_faces()):
-            iff = mesh.link.c2f[c0, local_face]
-            V0dp0_x += pf[iff] + mesh.global_faces.area[iff] * mesh.global_faces.sn[iff, 0] * mesh.global_faces.snsign[c0, local_face]
-            V0dp0_y += pf[iff] + mesh.global_faces.area[iff] * mesh.global_faces.sn[iff, 1] * mesh.global_faces.snsign[c0, local_face]
+            iff = c2f[c0, local_face]
+            V0dp0_x += pf[iff] * area[iff] * sn[iff, 0] * snsign[c0, local_face]
+            V0dp0_y += pf[iff] * area[iff] * sn[iff, 1] * snsign[c0, local_face]
 
         V1dp1_x = 0.0
         V1dp1_y = 0.0
         for local_face in range(mesh.no_local_faces()):
-            iff = mesh.link.c2f[c1, local_face]
-            V1dp1_x += pf[iff] + mesh.global_faces.area[iff] * mesh.global_faces.sn[iff, 0] * mesh.global_faces.snsign[c1, local_face]
-            V1dp1_y += pf[iff] + mesh.global_faces.area[iff] * mesh.global_faces.sn[iff, 1] * mesh.global_faces.snsign[c1, local_face]
+            iff = c2f[c1, local_face]
+            V1dp1_x += pf[iff] * area[iff] * sn[iff, 0] * snsign[c1, local_face]
+            V1dp1_y += pf[iff] * area[iff] * sn[iff, 1] * snsign[c1, local_face]
 
         velf_x = fw[ifc] * V0dp0_x / ap[c0] + (1.0 -fw[ifc]) * V1dp1_x / ap[c1]
         velf_y = fw[ifc] * V0dp0_y / ap[c0] + (1.0 -fw[ifc]) * V1dp1_y / ap[c1]
-        velf_p = velf_x * mesh.global_faces.sn[ifc, 0] + velf_y * mesh.global_faces.sn[ifc, 1]
+        velf_p = velf_x * sn[ifc, 0] + velf_y * sn[ifc, 1]
         vdotn = velf_i + velf_p \
-                - (fw[ifc] * vol[c0] / ap[c0] + (1.0 - fw[ifc]) * vol[c1] / ap[c1]) \
-                * (pc[c1] - pc[c0]) / mesh.global_faces.delta[ifc]
-        mdotf[ifc] = vdotn * rho * mesh.global_faces.area[ifc]  # mass flow rate in kg/s
+                - (fw[ifc] * volume[c0] / ap[c0] + (1.0 - fw[ifc]) * volume[c1] / ap[c1]) \
+                * (pc[c1] - pc[c0]) / delta[ifc]
+        mdotf[ifc] = vdotn * rho * area[ifc]  # mass flow rate in kg/s
 
-        return mdotf
+    return mdotf
 
 
 def cal_source_mass_imbalance(mesh, sc_p, mdotf):    # Calculate source due to mass imbalance
+    snsign = uf.shorted_name(mesh.global_faces, 'snsign')[0]
+    c2f = uf.shorted_name(mesh.link, 'c2f')[0]
     sc_p.fill(0.0)
     for ic in range(mesh.no_elems()):
         for local_face in range(mesh.no_local_faces()):
-            ifc = mesh.link.c2f[ic, local_face]
-            sc_p[ic] -= mdotf[ifc] * mesh.global_faces.snsign[ic, local_face]
+            ifc = c2f[ic, local_face]
+            sc_p[ic] -= mdotf[ifc] * snsign[ic, local_face]
 
     return sc_p
 
 def cal_pressure_link_coeff(mesh, ap, ap_p, anb_p, fw):
-    vol = mesh.elems.volume
+    snsign, area, delta = uf.shorted_name(mesh.global_faces, 'snsign', 'area', 'delta')
+    c2f, f2c, f_2_bf = uf.shorted_name(mesh.link, 'c2f', 'f2c', 'f_2_bf')
+    volume = uf.shorted_name(mesh.elems, 'volume')[0]
     ap_p.fill(0.0), anb_p.fill(0.0)
     for ic in range(mesh.no_elems()):
         for local_face in range(mesh.no_local_faces()):
-            ifc = mesh.link.c2f[ic, local_face]
-            if mesh.link.f_2_bf[ifc] != -1:  # IF boundary face = continue
+            ifc = c2f[ic, local_face]
+            if f_2_bf[ifc] != -1:  # IF boundary face = continue
                 continue
-            if mesh.global_faces.snsign[ic, local_face] == 1:
-                icn = mesh.link.f2c[ifc, 1]
+            if snsign[ic, local_face] == 1:
+                icn = f2c[ifc, 1]
             else:
-                icn = mesh.link.f2c[ifc, 0]
-            ap_p[ic] += (fw[ifc] * vol[ic] / ap[ic] + (1.0 - fw[ifc]) * vol[icn] / ap[icn]) \
-                            * rho * mesh.global_faces.area[ifc] / mesh.global_faces.delta[ifc]
-            anb_p[ic, local_face] = - (fw[ifc] * vol[ic] / ap[ic] + (1.0 - fw[ifc]) * vol[icn] / ap[icn]) \
-                            * rho * mesh.global_faces.area[ifc] / mesh.global_faces.delta[ifc]
+                icn = f2c[ifc, 0]
+            ap_p[ic] += (fw[ifc] * volume[ic] / ap[ic] + (1.0 - fw[ifc]) * volume[icn] / ap[icn]) \
+                            * rho * area[ifc] / delta[ifc]
+            anb_p[ic, local_face] = - (fw[ifc] * volume[ic] / ap[ic] + (1.0 - fw[ifc]) * volume[icn] / ap[icn]) \
+                            * rho * area[ifc] / delta[ifc]
 
 
-def solve_poison_eq(mesh, pcor_, ap_, anb_p_, ap_p_, sc_p_, res_p_):
+def solve_poison_eq(mesh, pcor_, ap_, anb_p_, ap_p_, sc_p_, res_p_, mdotf_, fw):
+    snsign = uf.shorted_name(mesh.global_faces, 'snsign')[0]
+    c2f, f2c = uf.shorted_name(mesh.link, 'c2f', 'f2c')
+
     def cal_gauss_seidel_loop(mesh, pcor, anb_p, ap_p, sc_p):
         for ic in range(mesh.no_elems()):
             sumf = 0.0
             for local_face in range(mesh.no_local_faces()):
-                ifc = mesh.link.c2f[ic, local_face]
-                if mesh.global_faces.snsign[ic, local_face] == 1:
-                    icn = mesh.link.f2c[ifc, 1]
+                ifc = c2f[ic, local_face]
+                if snsign[ic, local_face] == 1:
+                    icn = f2c[ifc, 1]
                 else:
-                    icn = mesh.link.f2c[ifc, 0]
+                    icn = f2c[ifc, 0]
                 sumf += anb_p[ic, local_face] * pcor[icn]
-            pcor[ic] = (sc_p[ic] - sumf) / ap_p[ic]
+            pcor[ic] = 2 * relax_p * (sc_p[ic] - sumf) / ap_p[ic]
 
         return pcor
 
@@ -283,6 +297,8 @@ def solve_poison_eq(mesh, pcor_, ap_, anb_p_, ap_p_, sc_p_, res_p_):
         return res2, res2p
 
     pcor_.fill(0.0)
+    sc_p_ = cal_source_mass_imbalance(mesh, sc_p_, mdotf_)
+    cal_pressure_link_coeff(mesh, ap_, ap_p_, anb_p_, fw)
     res2p = 0.0
     for iter_ in range(iter_pp):
         pcor_old = pcor_.copy()
@@ -300,15 +316,18 @@ def solve_poison_eq(mesh, pcor_, ap_, anb_p_, ap_p_, sc_p_, res_p_):
 
 
 def corrected_cell_vel(mesh, ucor, vcor, pcor, uc, vc, pfcor, ap, fw):
+    sn, snsign, area = uf.shorted_name(mesh.global_faces, 'sn', 'snsign', 'area')
+    c2f, f2c = uf.shorted_name(mesh.link, 'c2f', 'f2c')
+
     # Calculate correction pressure face value
     pfcor = cal_face_value(mesh, fw, pcor, pfcor)
 
     ucor.fill(0.0), vcor.fill(0.0)
     for ic in range(mesh.no_elems()):
         for local_face in range(mesh.no_local_faces()):
-            ifc = mesh.link.c2f[ic, local_face]
-            ucor[ic] += pfcor[ifc] * mesh.global_faces.sn[ifc, 0] * mesh.global_faces.snsign[ic, local_face] * mesh.global_faces.area[ifc]
-            vcor[ic] += pfcor[ifc] * mesh.global_faces.sn[ifc, 1] * mesh.global_faces.snsign[ic, local_face] * mesh.global_faces.area[ifc]
+            ifc = c2f[ic, local_face]
+            ucor[ic] += pfcor[ifc] * sn[ifc, 0] * snsign[ic, local_face] * area[ifc]
+            vcor[ic] += pfcor[ifc] * sn[ifc, 1] * snsign[ic, local_face] * area[ifc]
 
         ucor[ic] = - ucor[ic] / ap[ic]
         vcor[ic] = - vcor[ic] / ap[ic]
@@ -317,26 +336,32 @@ def corrected_cell_vel(mesh, ucor, vcor, pcor, uc, vc, pfcor, ap, fw):
 
 
 def corrected_massflux(mesh, ap, fw, mdotfcor, pcor, mdotf):
-    vol = mesh.elems.volume
+    area, delta = uf.shorted_name(mesh.global_faces, 'area', 'delta')
+    f2c, f_2_bf = uf.shorted_name(mesh.link, 'f2c', 'f_2_bf')
+    volume = uf.shorted_name(mesh.elems, 'volume')[0]
+
     for ifc in range(mesh.no_faces()):
-        if mesh.link.f_2_bf[ifc] != -1:  # IF boundary face = continue
+        if f_2_bf[ifc] != -1:  # IF boundary face = continue
             continue
-        c0 = mesh.link.f2c[ifc, 0]
-        c1 = mesh.link.f2c[ifc, 1]
-        coeff = fw[ifc] * vol[c0] / ap[c0] + (1.0 - fw[ifc]) * vol[c1] / ap[c1]
-        mdotfcor[ifc] = rho * coeff * mesh.global_faces.area[ifc] * (pcor[c0] - pcor[c1]) / mesh.global_faces.delta[ifc]
-        mdotf[ifc] = mdotf[ifc] + relax_uv * mdotfcor[ifc]
+        c0 = f2c[ifc, 0]
+        c1 = f2c[ifc, 1]
+        coeff = fw[ifc] * volume[c0] / ap[c0] + (1.0 - fw[ifc]) * volume[c1] / ap[c1]
+        mdotfcor[ifc] = rho * coeff * area[ifc] * (pcor[c0] - pcor[c1]) / delta[ifc]
+        mdotf[ifc] += relax_uv * mdotfcor[ifc]
 
 
 def corrected_pressure(pc, pf, pcor, pfcor):
     pc = pc + relax_p * pcor
-    # pf = pf + relax_p * pfcor
+    pf = pf + relax_p * pfcor
     return pc, pf
 
 
 def cal_outer_res(uc, vc, uc_old, vc_old):
     error_u = np.sum(np.abs(uc - uc_old)) / np.sum(np.abs(uc))
-    error_v = np.sum(np.abs(vc - vc_old)) / np.sum(np.abs(vc))
+    if np.sum(np.abs(vc)) < 1e-09:
+        error_v = 0.0
+    else:
+        error_v = np.sum(np.abs(vc - vc_old)) / np.sum(np.abs(vc))
 
     return error_u, error_v
 

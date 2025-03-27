@@ -94,7 +94,7 @@ def plot_vtk(phi_node, mesh, field):
         grid.point_data[field] = temperature
 
         plotter = pv.Plotter()
-        plotter.add_mesh(grid, show_edges=True, scalars=field, cmap="rainbow")
+        plotter.add_mesh(grid, show_edges=True, scalars=field, cmap="jet")
         plotter.show_axes()
 
         plotter.add_points(np.array([0, 0, 0]), color="black", point_size=10, render_points_as_spheres=True)
@@ -107,32 +107,10 @@ def plot_vtk(phi_node, mesh, field):
         temperature = phi_node
         grid.point_data[field] = temperature
         plotter = pv.Plotter()
-        plotter.add_mesh(grid, show_edges=True, scalars=field, cmap="rainbow")
+        plotter.add_mesh(grid, show_edges=True, scalars=field, cmap="jet")
         plotter.show_axes()
 
         plotter.add_points(np.array([0, 0, 0]), color="black", point_size=10, render_points_as_spheres=True)
         plotter.add_point_labels([[0, 0, 0]], ['Origin'], point_size=20, text_color="black")
     plotter.isometric_view_interactive()
     plotter.show()
-
-def plot_2D(mesh, phi_node):
-    coords = mesh.coords
-    x = coords[:, 0]
-    y = coords[:, 1]
-
-    # Reshape the x and y values to create a regular grid
-    grid_x = np.unique(x)
-    grid_y = np.unique(y)
-    X, Y = np.meshgrid(grid_x, grid_y)
-    Z = phi_node.reshape(len(grid_y), len(grid_x))
-    # Plot the result
-    fig, ax = plt.subplots()
-    contour = ax.contourf(X, Y, Z, cmap='rainbow')
-    fig.colorbar(contour, ax=ax, label="Phi values")  # Add color bar for scale
-
-    # Labeling axes and plot title
-    ax.set_xlabel('X')
-    ax.set_ylabel('Y')
-    ax.set_title('2D Plot of Phi Values')
-    ax.set_aspect('equal')  # Ensure equal scaling on both axes
-    plt.show()

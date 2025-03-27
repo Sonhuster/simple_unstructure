@@ -1,8 +1,5 @@
 import numpy as np
-from scipy.spatial import Delaunay
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d.art3d import Poly3DCollection
-import utils as uf
+import random
 
 # --------------------------Initialization------------------------------ #
 class Fluid:
