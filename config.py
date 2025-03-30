@@ -5,15 +5,14 @@ from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 import utils as uf
 
 def cell_to_face_interpolation(mesh):
-    wf = np.zeros(mesh.no_faces())
-    for ifc in range(mesh.no_faces()):
-        ic0 = mesh.link.f2c[ifc, 0]
-        ic1 = mesh.link.f2c[ifc, 1]
-        d0 = np.linalg.norm(mesh.elems.centroid[ic0] - mesh.global_faces.centroid[ifc])
-        d1 = np.linalg.norm(mesh.elems.centroid[ic1] - mesh.global_faces.centroid[ifc])
-        wf[ifc] = (1/d0) / ((1/d0) + (1/d1))
-
+    ifc = np.arange(mesh.no_faces())
+    ic0 = mesh.link.f2c[ifc, 0]
+    ic1 = mesh.link.f2c[ifc, 1]
+    d0 = np.linalg.norm(mesh.elems.centroid[ic0] - mesh.global_faces.centroid[ifc], axis=1)
+    d1 = np.linalg.norm(mesh.elems.centroid[ic1] - mesh.global_faces.centroid[ifc], axis=1)
+    wf = (1 / d0) / ((1 / d0) + (1 / d1))
     return wf
+
 
 def cell_to_node_interpolation(mesh):
     wv = np.zeros((mesh.no_nodes(), mesh.no_elems()))
@@ -230,7 +229,7 @@ class BlockData2D:
     # Get the indices where faces are on boundary.
     def domain_boundary(self, convex_hull):
         self.boundary_info.nodes = np.unique(convex_hull)
-        for i in range(10):
+        for i in range(100):
             temp1 = convex_hull + i
             check1 = temp1[:, 0] * temp1[:, 1]
             temp2 = self.global_faces.define + i
@@ -315,6 +314,49 @@ class BlockData2D:
         self.boundary_info.node_patches["bot nodes"] = self.boundary_info.nodes[boundary_nodes[:, 1] < 1e-03]
         self.boundary_info.node_patches["zero nodes"] = self.boundary_info.nodes[boundary_nodes[:, 1] > 1e-03]
 
+    def get_face_mask_element_wise(self):
+        basis_bc_mask = np.where(self.link.f_2_bf != -1)[0]
+        filter_ = self.link.f_2_bf.copy()
+        filter_[basis_bc_mask] = self.link.bf_2_f.copy()
+        mask_bc = (filter_ >= 0)[self.link.c2f]
+        mask_in = ~ mask_bc
+        return mask_bc, mask_in
+
+
+    def var_elem_wise(self, *vars):
+        result = []
+        for var in vars:
+            if len(var) == self.no_faces():
+                result.append(var[self.link.c2f])
+            elif len(var) == self.no_nodes():
+                result.append(var[self.link.c2v])
+            elif len(var) == len(self.boundary_info.faces):
+                arr_temp = np.zeros_like(self.link.f_2_bf)
+                filter_ = self.link.f_2_bf != -1
+                arr_temp[filter_] = var.copy()
+                result.append(self.var_elem_wise(arr_temp)[0])
+            else:
+                raise ValueError("Re-check variable passing")
+
+        return tuple(result)
+
+    def var_face_wise(self, *vars):
+        result = []
+        for var in vars:
+            if len(var) == self.no_elems():
+                result.append(var[self.link.f2c])
+            # elif len(var) == self.no_nodes():
+            #     result.append(var[self.link.c2v])
+            # elif len(var) == len(self.boundary_info.faces):
+            #     arr_temp = np.zeros_like(self.link.f_2_bf)
+            #     filter_ = self.link.f_2_bf != -1
+            #     arr_temp[filter_] = var.copy()
+            #     result.append(self.var_elem_wise(arr_temp)[0])
+            else:
+                raise ValueError("Re-check variable passing")
+
+        return tuple(result)
+
     def call_configuration(self, convex_hull, global_face):
         self.elems_centroid()
         self.get_elem_volume()
@@ -336,10 +378,10 @@ class BlockData2D:
 
 # --------------------------Boundary condition------------------------------ #
 def bc_face_lid_driven_cavity(mesh, ubc, vbc, u_lid, v_lid):
-    for ifc in mesh.boundary_info.face_patches['bot walls']:
-        ifb = mesh.link.f_2_bf[ifc]
-        ubc[ifb] = u_lid
-        vbc[ifb] = v_lid
+    ifc = mesh.boundary_info.face_patches['bot walls']
+    ifb = mesh.link.f_2_bf[ifc]
+    ubc[ifb] = u_lid
+    vbc[ifb] = v_lid
 
 
 def bc_node_lid_driven_cavity(mesh, uv, vv, u_lid, v_lid):
@@ -403,3 +445,24 @@ def get_convex_hull(coords):
 
     convex_hull = np.concatenate((west, southern[1:], eastern[1:], northen[1:]))
     return np.column_stack((convex_hull[:-1], convex_hull[1:]))
+
+def get_noise(coords, noise):
+    # Identify boundary nodes
+    west = coords[coords[:, 0] < 1e-06]
+    east = coords[np.abs(coords[:, 0] - np.max(coords[:, 0])) < 1e-06]
+    north = coords[np.abs(coords[:, 1] - np.max(coords[:, 1])) < 1e-06]
+    south = coords[coords[:, 1] < 1e-06]
+
+    boundary_nodes = np.vstack([west, east, north, south])
+
+    interior_mask = np.ones(len(coords), dtype=bool)
+    for boundary in boundary_nodes:
+        interior_mask = interior_mask & ~np.all(coords == boundary, axis=1)
+
+    interior_nodes = coords[interior_mask]
+
+    interior_nodes_noised = interior_nodes + np.random.uniform(-noise, noise, size=interior_nodes.shape)
+
+    coords[interior_mask] = interior_nodes_noised
+
+    return coords

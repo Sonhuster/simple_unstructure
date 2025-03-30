@@ -7,17 +7,18 @@ import initialization as init
 # Input definition
 u_lid, v_lid = 1.0, 0.0
 tol_inner = 1e-06
-tol_outer = 1e-010
-iter_outer = 500
+tol_outer = 1e-06
+iter_outer = 2000
 iter_mom = 1
-iter_pp = 1
+iter_pp = 100
 max_iteration = 1000
 
 relax_uv = 0.8
 relax_p = 0.15
+noise = 0.00
 
 if __name__ == '__main__':
-    coordinates = uf.get_coordinate(20, 0.00)
+    coordinates = uf.get_coordinate(4, 0.0)
 
     elem_coords = cf.get_elems(coordinates)
     n = len(np.unique(coordinates[:, 0])) - 1 # Number of cell along each dir
@@ -28,11 +29,12 @@ if __name__ == '__main__':
     global_face = cf.get_global_face(n_v, n)
     neighbors = cf.get_neighbor_quad(n_c, n)
     convex_hull = cf.get_convex_hull(coordinates)
+    coordinates = cf.get_noise(coordinates, noise)
     mesh = cf.BlockData2D(coordinates, simplices, neighbors, n_f)
     mesh.call_configuration(convex_hull, global_face)
     del coordinates, elem_coords, n, n_v, n_c, n_f, simplices, global_face, neighbors, convex_hull
 
-
+    # coordinates = cf.get_noise(coordinates, noise)
     # tri = uf.create_tetrahedral_faces(coordinates)
     # tri.no_faces = uf.number_face_tri(tri)
     # mesh = cf.BlockData2D(tri.points, tri.simplices, tri.neighbors, tri.no_faces)
@@ -42,7 +44,7 @@ if __name__ == '__main__':
 
 
     # Node and face weighted coefficients
-    fw = cf.cell_to_face_interpolation(mesh)        # [face]
+    fw = cf.cell_to_face_interpolation(mesh)  # [face]
     cw = cf.cell_to_node_interpolation(mesh)        # [node, cell]
 
     # Allocate memory && initialization
@@ -58,14 +60,20 @@ if __name__ == '__main__':
 
     for iter_ in range(iter_outer):
         # Cal mom-coefficients
-        sol.cal_momemtum_link_coeff(mesh, ap, scx, scy, anb, var.mdotf, var.ubc, var.vbc)
-        sol.cal_momentume_pressure_source(mesh, fw, scx, scy, var.pc, var.pf)                        # TODO: Calculate pressure face
+        # Gọi hai hàm
+        ap, anb, scx, scy = sol.cal_momemtum_link_coeff(mesh, ap, scx, scy, var.mdotf, var.ubc, var.vbc)
+        scx, scy = sol.cal_momentume_pressure_source(mesh, fw, scx, scy, var.pc, var.pf)                        # TODO: Calculate pressure face
+        # result1 = (scx.copy(), scy.copy())
+        # sol.cal_momentume_pressure_source1(mesh, fw, scx, scy, var.pc, var.pf)
+        # result2 = (scx.copy(), scy.copy())
+        # print(np.allclose(result1[0], result2[0]))  # So sánh ap
+        # print(np.allclose(result1[1], result2[1]))  # So sánh scx
         var.uv, var.vv, var.pv = sol.cal_node_value(var.uv, var.vv, var.pv, var.uc, var.vc, var.pc, mesh, cw, u_lid, v_lid)
-        sol.cal_momentum_skew_term(skewx, skewy, var.uv, var.vv, mesh)
+        skewx, skewy = sol.cal_momentum_skew_term(var.uv, var.vv, mesh)
 
         # Solve mom-equation
-        var.uc = sol.solve_x_mom(mesh, var.uc, ap, anb, scx, skewx, res)
-        var.vc = sol.solve_y_mom(mesh, var.vc, ap, anb, scy, skewy, res)
+        var.uc = sol.solve_mom_eq(mesh, var.uc, ap, anb, scx, skewx, res, tag = "X")
+        var.vc = sol.solve_mom_eq(mesh, var.vc, ap, anb, scy, skewy, res, tag = "Y")
 
         # Solve poison equation
         var.mdotf = sol.cal_massflow_face(mesh, var.uc, var.vc, var.pc, var.pf, ap, fw, var.mdotf)
@@ -86,6 +94,7 @@ if __name__ == '__main__':
     var.uv, var.vv, var.pv = sol.cal_node_value(var.uv, var.vv, var.pv, var.uc, var.vc, var.pc, mesh, cw, u_lid, v_lid)
     uf.plot_vtk(var.uv, mesh, "Velocity U")
     uf.plot_vtk(var.vv, mesh, "Velocity V")
+    uf.plot_vtk(np.sqrt(var.uv ** 2 + var.vv ** 2), mesh, "Velocity Magnitude")
     uf.plot_vtk(var.pv, mesh, "Pressure")
     print("Case has been done")
 

@@ -10,16 +10,16 @@ class Fluid:
 
         self.uc = np.zeros(n_cells)
         self.vc = np.zeros(n_cells)
-        self.pc = np.ones(n_cells) * 0
+        self.pc = np.ones(n_cells)
 
         self.uf = np.zeros(n_faces)
         self.vf = np.zeros(n_faces)
-        self.pf = np.ones(n_faces) * 0
+        self.pf = np.ones(n_faces)
         self.mdotf = np.zeros(n_faces)
 
         self.uv = np.zeros(n_nodes)
         self.vv = np.zeros(n_nodes)
-        self.pv = np.ones(n_nodes) * 0
+        self.pv = np.ones(n_nodes)
 
         self.ubc = np.zeros(len(mesh.boundary_info.faces))
         self.vbc = np.zeros(len(mesh.boundary_info.faces))
@@ -62,7 +62,7 @@ def vel_correction_arg(mesh):
 
 # --------------------------Boundary condition------------------------------ #
 def set_bc_face_from_local_to_global(mesh, ubc, vbc, uf, vf):
-    for ifb in range(len(mesh.boundary_info.faces)):
-        ifc = mesh.link.bf_2_f[ifb]
-        uf[ifc] = ubc[ifb]
-        vf[ifc] = vbc[ifb]
+    ifb = np.arange(len(mesh.boundary_info.faces))
+    ifc = mesh.link.bf_2_f[ifb]
+    uf[ifc] = ubc[ifb]
+    vf[ifc] = vbc[ifb]

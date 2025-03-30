@@ -15,6 +15,13 @@ def normalized_vector(vector):
 
     return vector / norm
 
+def get_total_flux(*vars):
+    result = []
+    for var in vars:
+        result.append(np.sum(var, axis=1))
+
+    return tuple(result)
+
 
 def get_coordinate(number, skewness):
     x = np.linspace(0, 0.9, number)
@@ -28,13 +35,13 @@ def get_coordinate(number, skewness):
         X, Y, Z = np.meshgrid(x, y, z)
         coords = np.vstack([X.ravel(), Y.ravel(), Z.ravel()]).T
 
-    # Add random distortion for interior points
-    for i in range(len(coords)):
-        # Skip boundary points (x = 0 or x = 0.9, y = 0 or y = 0.9)
-        if 0 < coords[i, 0] < 0.9 and 0 < coords[i, 1] < 0.9:
-            # Add random noise to interior points
-            coords[i, 0] += np.random.uniform(-skewness, skewness)  # Small perturbation for x
-            coords[i, 1] += np.random.uniform(-skewness, skewness)  # Small perturbation for y
+    # # Add random distortion for interior points
+    # for i in range(len(coords)):
+    #     # Skip boundary points (x = 0 or x = 0.9, y = 0 or y = 0.9)
+    #     if 0 < coords[i, 0] < 0.9 and 0 < coords[i, 1] < 0.9:
+    #         # Add random noise to interior points
+    #         coords[i, 0] += np.random.uniform(-skewness, skewness)  # Small perturbation for x
+    #         coords[i, 1] += np.random.uniform(-skewness, skewness)  # Small perturbation for y
 
     return coords
 
