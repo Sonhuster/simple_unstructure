@@ -24,8 +24,8 @@ def get_total_flux(*vars):
 
 
 def get_coordinate(number, skewness):
-    x = np.linspace(0, 0.9, number)
-    y = np.linspace(0, 0.9, number)
+    x = np.linspace(0, 1.0, number)
+    y = np.linspace(0, 1.0, number)
     z = np.linspace(0, 0, number)
 
     if len(np.unique(z)) == 1:

@@ -394,6 +394,37 @@ def bc_node_lid_driven_cavity(mesh, uv, vv, u_lid, v_lid):
     vv[mesh.boundary_info.node_patches['zero nodes']] = 0.0
 
 # ---------------------------------------------------------------------------- #
+def from_coords_to_mesh(coordinates, noise, element_type : str):
+    assert element_type == "TRI" or element_type == "QUAD", "Element type must be TRI or QUAD"
+
+    if element_type == "QUAD":
+        elem_coords = get_elems(coordinates)
+        n = len(np.unique(coordinates[:, 0])) - 1  # Number of cell along each dir
+        n_v = len(coordinates)
+        n_c = len(elem_coords)
+        n_f = 2 * (n + 1) * n
+        simplices = get_simplices(coordinates, n_c, n)
+        global_face = get_global_face(n_v, n)
+        neighbors = get_neighbor_quad(n_c, n)
+        convex_hull = get_convex_hull(coordinates)
+        coordinates = get_noise(coordinates, noise)
+        mesh = BlockData2D(coordinates, simplices, neighbors, n_f)
+        mesh.call_configuration(convex_hull, global_face)
+    else:
+        coordinates = get_noise(coordinates, noise)
+        tri = uf.create_tetrahedral_faces(coordinates)
+        tri.no_faces = uf.number_face_tri(tri)
+        mesh = BlockData2D(tri.points, tri.simplices, tri.neighbors, tri.no_faces)
+        global_face = np.array([None])
+        mesh.call_configuration(tri.convex_hull, global_face)
+
+    print(f"_______________________FINISH GENERATING {element_type} UNSTRUCTURED MESH_______________________")
+    print(f"Number of elements: {mesh.no_elems()}")
+    print(f"Number of faces: {mesh.no_faces()}")
+    print(f"Number of nodes: {mesh.no_nodes()}")
+    return mesh
+
+
 def get_elems(coords):
     mean_x = 0.5 * (np.unique(coords[:, 0])[0:-1] + np.unique(coords[:, 0])[1:])
     mean_y = 0.5 * (np.unique(coords[:, 1])[0:-1] + np.unique(coords[:, 1])[1:])
