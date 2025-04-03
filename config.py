@@ -44,6 +44,7 @@ class Element:
 
 class BoundaryInfo:
     def __init__(self):
+        self.elems = np.array([None])
         self.faces = np.array([None])
         self.nodes = np.array([None])
         self.face_patches = {}
@@ -240,6 +241,12 @@ class BlockData2D:
                 continue
 
         self.boundary_info.faces = np.where(np.isin(check2, check1) == True)[0]
+        bcells = []
+        for ifb in self.boundary_info.faces:
+            bc_cell = np.where(self.link.c2f == ifb)[0][0]
+            bcells.append(bc_cell)
+
+        self.boundary_info.cells = np.array(bcells)
 
     # # Get local outward normal vector of each element
     # def get_normal_face(self):
@@ -392,6 +399,20 @@ def bc_node_lid_driven_cavity(mesh, uv, vv, u_lid, v_lid):
     uv[mesh.boundary_info.node_patches['zero nodes']] = 0.0
     vv[mesh.boundary_info.node_patches['bot nodes']] = v_lid
     vv[mesh.boundary_info.node_patches['zero nodes']] = 0.0
+
+def find_normal_bc_point(mesh):
+    for idx, ifc in enumerate(mesh.boundary_info.faces):
+        bc_nodes = mesh.global_faces.define[ifc]
+        bc_cells = mesh.elems.define[mesh.boundary_info.cells[idx]]
+
+        a = mesh.coords[bc_nodes[0]]
+        b = mesh.coords[bc_nodes[1]]
+        c = mesh.coords[np.setdiff1d(bc_cells, bc_nodes)[0]]
+        m = (a + b) / 2
+        numerator = (a[0] - b[0])*(c[0] - m[0]) + (a[1] - b[1])*(c[1] - m[1])
+        Ra = (a[0] - c[0]) * (a[0] - b[0]) + (a[1] - c[1]) * (a[1] - b[1])
+        Rb = (b[0] - c[0]) * (a[0] - b[0]) + (b[1] - c[1]) * (a[1] - b[1])
+        print("SS")
 
 # ---------------------------------------------------------------------------- #
 def from_coords_to_mesh(coordinates, noise, element_type : str):

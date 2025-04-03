@@ -7,6 +7,18 @@ from main import iter_pp
 from main import relax_uv
 from main import relax_p
 
+"""
+Symbol explanation:
+    - In order to vectorize formulations, I used the combination symbols to mark array shape, it this function,
+    they include three types:
+        + _var  implies this array's head is shaped (number of elements) x (number of local faces).
+        +  var_ implies this array's head is shaped (number of global faces) x (2).
+        + _var_ implies this array's head is shaped (number of elements) x (2) x (number of local faces).
+    The tail (number of elements along the latest axis) of the var array depends on its original tail, for example:
+        + sn has tail == 2, so _sn = (number of elements) x (number of local faces) x (2)
+        + area has tail == 1, so _area = (number of elements) x (number of local faces) x (1)
+"""
+
 mu = 0.01
 rho = 1.0
 
@@ -24,7 +36,7 @@ def cal_face_value(mesh, fw, var, varf):
     return varf_bc + varf_in
 
 
-def cal_node_value(uv, vv, pv, uc, vc, pc, mesh, cw, u_lid, v_lid):
+def cal_node_value(uc, vc, pc, mesh, cw, u_lid, v_lid):
     uv = np.sum(uc * cw, axis=1)
     vv = np.sum(vc * cw, axis=1)
     pv = np.sum(pc * cw, axis=1)
@@ -41,11 +53,16 @@ def cal_momemtum_link_coeff(mesh, ap, scx, scy, mdotf, ubc, vbc):
     (_area, _delta, _ubc, _vbc, mf) = mesh.var_elem_wise(area, delta, ubc, vbc, mdotf)
     ap.fill(0.0), scx.fill(0.0), scy.fill(0.0)
 
+    # Diagonal coefficient
     mf *= snsign
     ap_in = (mu * _area / _delta + 0.5 * (np.abs(mf) + mf)) * mask_in
     ap_bc = (mu * _area / _delta) * mask_bc
     ap = ap_in + ap_bc
-    anb = (- mu * _area / _delta - 0.5 * (np.abs(mf) - mf)) * mask_in
+    # Off-diagonal coefficient
+    anb_in = (- mu * _area / _delta - 0.5 * (np.abs(mf) - mf)) * mask_in
+    anb_bc = (- 0.0) * mask_bc
+    anb = anb_in + anb_bc
+    # Source terms
     scx = (_ubc * mu * _area / _delta - mf * _ubc) * mask_bc
     scy = (_vbc * mu * _area / _delta - mf * _vbc) * mask_bc
 
@@ -124,20 +141,10 @@ def solve_mom_eq(mesh, varc_, ap_, anb_, sc_, skew_, res_, tag):
     return varc_
 
 
-def cal_massflow_face(mesh, uc, vc, pc, pf, ap, fw, mdotf):
+def cal_massflow_face(mesh, uc, vc, pc, pf, ap, fw):
     """
     Calculate face mass flow using PWIM method.
     Ref: https://www.youtube.com/watch?v=4jQxtz29UQw&list=PLVuuXJfoPgT4gJcBAAFPW7uMwjFKB9aqT&t=1243s
-
-    Symbol explanation:
-    - In order to vectorize formulations, I used the combination symbols to mark array shape, it this function,
-    they include three types:
-        + _var  implies this array's head is shaped (number of elements) x (number of local faces).
-        +  var_ implies this array's head is shaped (number of global faces) x (2).
-        + _var_ implies this array's head is shaped (number of elements) x (2) x (number of local faces).
-    The tail (number of elements along the latest axis) of the var array depends on its original tail, for example:
-        + sn has tail == 2, so _sn = (number of elements) x (number of local faces) x (2)
-        + area has tail == 1, so _area = (number of elements) x (number of local faces) x (1)
     """
     def grad_2nd(var, delta__):
         assert len(var) == len(delta), "TypeError: Segmentation fault"
@@ -176,7 +183,6 @@ def cal_massflow_face(mesh, uc, vc, pc, pf, ap, fw, mdotf):
 
 def cal_source_mass_imbalance(mesh, sc_p, mdotf):    # Calculate source due to mass imbalance
     snsign = uf.shorted_name(mesh.global_faces, 'snsign')[0]
-    c2f = uf.shorted_name(mesh.link, 'c2f')[0]
     sc_p.fill(0.0)
 
     (_mdotf, ) = mesh.var_elem_wise(mdotf)
